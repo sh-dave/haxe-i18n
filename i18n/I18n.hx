@@ -20,15 +20,15 @@ private typedef Item = {
 
 class I18n {
     macro public static function init() : Expr {
-        //trace("I18n.init()");
-
 		if (initialized) {
-			return Context.parse("{}", Context.currentPos()); // Already initialized
+			return Context.parse("{}", Context.currentPos());
 		}
 
         // make working directory
-        if (!FileSystem.exists(Path.join([workDir, DEFAULT]))) {
-            mkdirs(workDir + "/" + DEFAULT);
+		var defaultPath = Path.join([workDir, DEFAULT]);
+		
+        if (!FileSystem.exists(defaultPath)) {
+            mkdirs(defaultPath);
 		}
 
         // recentLocale is the locale used by previous build
@@ -45,7 +45,6 @@ class I18n {
 
         File.saveContent(recentPath, useLocale);
 
-		// register post-compile callback
         Context.onGenerate(postCompile);
 
 		// scan for all available locale folders
@@ -62,15 +61,16 @@ class I18n {
         for (loc in locales) {
             var map = new Map<String, String>();
 
-			var stringsPath = Path.join([workDir, loc, "strings.xml"]);
+			var stringsPath = Path.join([workDir, loc, 'strings.xml']);
+			
             if (FileSystem.exists(stringsPath)) {
                 var xml = Xml.parse(File.getContent(stringsPath)).firstElement();
 
-                for (file in xml.elementsNamed("file")) {
-                    var path = file.get("path");
+                for (file in xml.elementsNamed('file')) {
+                    var path = file.get('path');
 
-                    for (t in file.elementsNamed("t")) {
-                        var id = t.get("id");
+                    for (t in file.elementsNamed('t')) {
+                        var id = t.get('id');
                         var val = t.firstChild().nodeValue;
                         map.set('$path//$id', val);
                     }
@@ -82,18 +82,18 @@ class I18n {
 
 		if (isglobal) {
             // check for absence resources and build a fallback lookup
-            var allRes = listDir(Path.join([workDir, DEFAULT]), "");
+            var allRes = listDir(Path.join([workDir, DEFAULT]), '');
 
             for (loc in locales) {
                 if (loc == DEFAULT) {
 					continue;
 				}
 
-                var locRes = listDir(Path.join([workDir, loc]), "");
+                var locRes = listDir(Path.join([workDir, loc]), '');
 
                 for (file in allRes) {
-                    if (file != "strings.xml" && !locRes.has(file)) {
-                        absence.push(loc + "/" + file);
+                    if (file != 'strings.xml' && !locRes.has(file)) {
+                        absence.push(Path.join([loc, file]));
 					}
                 }
             }
@@ -106,7 +106,7 @@ class I18n {
 
     macro public static function i18n(s: ExprOf<String>) : Expr {
         if (!initialized) {
-			throw "Call I18n.init()";
+			throw "call i18n.I18n.init()";
 		}
 
         var str = expr2Str(s);
@@ -144,11 +144,11 @@ class I18n {
 
     macro public static function i18nRes(path: ExprOf<String>) : Expr {
         if (!initialized) {
-			throw "Call I18n.init()";
+			throw "call i18n.I18n.init()";
 		}
 
         var p = expr2Str(path);
-        var defaultPath = workDir + "/" + DEFAULT + "/" + p;
+        var defaultPath = Path.join([workDir, DEFAULT, p]);
 
 		if (!FileSystem.exists(defaultPath)) {
 			Context.error("Asset:" + defaultPath + " does not exist.", path.pos);
@@ -156,26 +156,29 @@ class I18n {
 
         return switch useLocale {
 			case GLOBAL:
-				copy(defaultPath, assetsDir + "/" + DEFAULT + "/" + p);
+				copy(defaultPath, Path.join([assetsDir, DEFAULT, p]));
 
 				for (l in locales) {
-					var locPath = l + "/" + p;
-
-					if (FileSystem.exists(workDir + "/" + locPath)) {
-						copy(workDir + "/" + locPath, assetsDir + "/" + locPath);
+					var locPath = Path.join([l, p]);
+					var workPath = Path.join([workDir, locPath]);
+					
+					if (FileSystem.exists(workPath)) {
+						copy(workPath, Path.join([assetsDir, locPath]));
 					}
 				}
 				Context.parse("i18n.Global.res('" + p + "')", path.pos);
 			default:
 				var locPath = useLocale + "/" + p;
-
-				if (FileSystem.exists(workDir + "/" + locPath)) {
-					copy(workDir + "/" + locPath, assetsDir + "/" + p);
+				var workPath = Path.join([workDir, locPath]);
+				var assetsPath = Path.join([assetsDir, p]);
+				
+				if (FileSystem.exists(workPath)) {
+					copy(workPath, assetsPath);
 				} else {
-					copy(defaultPath, assetsDir + "/" + p);
+					copy(defaultPath, assetsPath);
 				}
 
-				Context.parse("'" + assetsDir + "/" + p + "'", path.pos);
+				Context.parse("'" + assetsPath + "'", path.pos);
         }
     }
 
@@ -205,16 +208,11 @@ class I18n {
     }
 
     macro public static function getSupportedLocales() : Expr {
-        var code = new StringBuf();
-        code.add("[");
-
-		if (useLocale == GLOBAL) {
-            for (l in locales) code.add("'" + l + "',");
-		}
-
-		code.add("]");
-        //trace("I18n.getSupportedLocales=" + code);
-        return Context.parse(code.toString(), Context.currentPos());
+		return macro {
+			$v{useLocale} == $v{GLOBAL}
+				? $v{locales}
+				: [];
+		}			
     }
 
     macro public static function setCurrentLocale(locExpr: Expr) : Expr {
@@ -296,43 +294,77 @@ class I18n {
 
 		for (i in all) {
             if (i.file != path) {
-                if (fileNode != null) fileNode.addChild(Xml.createPCData("\r\n  "));
+                if (fileNode != null) {
+					fileNode.addChild(Xml.createPCData("\r\n  "));
+				}
+				
                 path = i.file;
                 str.addChild(Xml.createPCData("\r\n  "));
                 fileNode = Xml.createElement("file");
                 fileNode.set("path", path);
                 str.addChild(fileNode);
             }
+			
             fileNode.addChild(Xml.createPCData("\r\n    "));
-            var t = Xml.createElement("t");
+            
+			var t = Xml.createElement("t");
             var k = lbEsc(i.val);
             t.set("id", k);
-            var val = defLookup.get(i.file + "//" + k);
-            if (val == null) val = i.val;
+            
+			var val = defLookup.get(i.file + "//" + k);
+            
+			if (val == null) {
+				val = i.val;
+			}
+			
             t.addChild(Xml.createPCData(val));
             fileNode.addChild(t);
-            var lineinfo = new StringBuf();
+            
+			var lineinfo = new StringBuf();
             lineinfo.add("line ");
-            for (l in 0...i.pos.length) { if (l > 0) lineinfo.add(", "); lineinfo.add(i.pos[l]); }
+            
+			for (l in 0...i.pos.length) {
+				if (l > 0) {
+					lineinfo.add(", ");
+				}
+				
+				lineinfo.add(i.pos[l]);			
+			}
+			
             fileNode.addChild(Xml.createComment(lineinfo.toString()));
         }
-        if (fileNode != null) fileNode.addChild(Xml.createPCData("\r\n  "));
+        
+		if (fileNode != null) {
+			fileNode.addChild(Xml.createPCData("\r\n  "));
+		}
+		
         str.addChild(Xml.createPCData("\r\n"));
-        File.saveContent(workDir + "/" + DEFAULT + "/strings.xml", XML_HEAD + str.toString());
+        File.saveContent(Path.join([workDir, DEFAULT, 'strings.xml']), XML_HEAD + str.toString());
 
-        if (useLocale != GLOBAL) return;
+        if (useLocale != GLOBAL) {
+			return;
+		}
 
         for (loc in locales) {
-            str = Xml.createElement("strings");
+            str = Xml.createElement('strings');
             var lookup = lookups.get(loc);
+			
             for (key in strings.keys()) {
                 var item = strings.get(key);
                 var val = lookup.get(key);
-                if (val == null) val = defLookup.get(key);
-                if (val == null) val = item.val;
+            
+				if (val == null) {
+					val = defLookup.get(key);
+				}
+				
+                if (val == null) {
+					val = item.val;
+				}
+				
                 var id = item.id;
-                var t = Xml.createElement("t");
-                t.set("id", "" + id);
+                var t = Xml.createElement('t');
+                
+				t.set('id', '$id');
                 t.addChild(Xml.createPCData(val));
                 str.addChild(t);
             }
@@ -345,14 +377,17 @@ class I18n {
 
     static function mkdirs(path: String) {
 //        Context.warning("mkdirs=" + path, Context.currentPos());
-        var arr = path.split("/");
-        var dir = "";
+        var arr = path.split('/');
+        var dir = '';
+		
         for (i in 0...arr.length) {
             dir += arr[i];
-            if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) {
+        
+			if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) {
                 FileSystem.createDirectory(dir);
             }
-            dir += "/";
+            
+			dir += '/';
         }
     }
 
@@ -391,28 +426,38 @@ class I18n {
         }
 
         var idx = dest.lastIndexOf("/");
-        if (idx > 0) mkdirs(dest.substr(0, idx));
-        File.copy(src, dest);
+        
+		if (idx > 0) {
+			mkdirs(dest.substr(0, idx));
+		}
+        
+		File.copy(src, dest);
     }
 
     static inline function expr2Str(expr: ExprOf<String>) : String {
         var str: String = null;
-        switch (expr.expr) {
-        case EConst(c):
-            switch (c) {
-            case CString(s): str = s;
-            default:
-            }
-        default:
+        
+		switch expr.expr {
+			case EConst(c):
+				switch (c) {
+					case CString(s): str = s;
+					default:
+				}
+			default:
         }
-        if (str == null) {
-            Context.error("Constant string expected", expr.pos);
+        
+		if (str == null) {
+            Context.error('Constant string expected', expr.pos);
         }
-        return str;
+        
+		return str;
     }
 
     static function listDir(path: String, prefix: String, ?out: Array<String>) {
-        if (out == null) out = [];
+        if (out == null) {
+			out = [];
+		}
+		
         for (file in FileSystem.readDirectory(path)) {
             if (FileSystem.isDirectory(path + "/" + file)) {
                 listDir(path + "/" + file, prefix + file + "/", out);

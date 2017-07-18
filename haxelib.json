@@ -1,6 +1,6 @@
 {
-  "name": "rox-i18n",
-  "url": "https://github.com/rockswang/i18n",
+  "name": "haxe-i18n",
+  "url": "https://github.com/rockswang/haxe-i18n",
   "license": "MIT",
   "tags": [ "cross", "macro", "i18n", "localize" ],
   "description": "Macro driven internationalization/localization toolkit for Haxe.",

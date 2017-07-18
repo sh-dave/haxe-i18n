@@ -5,12 +5,12 @@ i18n is a macro driven internationalization/localization toolkit for Haxe.
 
 ### Localization quick tour
 
-1. 'using' I18n and call macro method I18n.init() at the entry point of your code.
-2. Add '.i18n()' after all string literals to be externalized.
-3. Build your project, strings will be extracted to "i18n_work/default/strings.xml", under your project root directory.
-4. Then you can do translating based on strings.xml and store the translations into "i18n_work/&lt;locale&gt;/" folders.
-5. Specify the target locale with macro compiler option I18n.locale(), e.g.: "--macro com.roxstudio.i18n.I18n.locale('zh')".
-6. Rebuild the project, this time I18n will look up the corresponding translation and replace the original string literals with the translated version.
+1. ```using i18n.I18n```
+2. Add '.i18n()' after all string literals to be externalized
+3. Build your project, strings will be extracted to "i18n_work/default/strings.xml", under your project root directory
+4. Then you can do translating based on strings.xml and store the translations into "i18n_work/&lt;locale&gt;/" folders
+5. Specify the target locale with macro compiler option I18n.locale(), e.g.: "--macro i18n.I18n.locale('zh')"
+6. Rebuild the project, this time I18n will look up the corresponding translation and replace the original string literals with the translated version
 
 ### Internationalization quick tour:
 
@@ -75,7 +75,7 @@ If the desired locale is not supported, then it will fallback to 'default'.
 
 ### Run-time locale switching
 
-Run-time locale switching is a little bit more tricky then launch-time approach, normally it needs to do some extra operations to handle the string changes, 
+Run-time locale switching is a little bit more tricky then launch-time approach, normally it needs to do some extra operations to handle the string changes,
 e.g. UI refreshing etc. Here's the approach used by I18n.
 ```haxe
     var textfield = new TextField();
